@@ -2,6 +2,9 @@ package com.example.taskmanager.controller;
 
 import com.example.taskmanager.model.Task;
 import com.example.taskmanager.repository.TaskRepository;
+import com.example.taskmanager.security.JwtUtil;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,25 +17,42 @@ public class TaskController {
     @Autowired
     private TaskRepository taskRepository;
 
-    // Create Task
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    //  Extract user ID from JWT
+    private String getUserIdFromToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            Claims claims = jwtUtil.extractAllClaims(token);
+            return claims.getSubject(); // username is stored as subject
+        }
+        return null;
+    }
+
+    //  Create Task (automatically assigns userId)
     @PostMapping
-    public Task createTask(@RequestBody Task task) {
+    public Task createTask(@RequestBody Task task, HttpServletRequest request) {
+        String userId = getUserIdFromToken(request);
+        task.setUserId(userId);
         return taskRepository.save(task);
     }
 
-    // Read All Tasks
+    //  Get all tasks for the logged-in user
     @GetMapping
-    public List<Task> getAllTasks() {
-        return taskRepository.findAll();
+    public List<Task> getAllTasks(HttpServletRequest request) {
+        String userId = getUserIdFromToken(request);
+        return taskRepository.findByUserId(userId);
     }
 
-    // Read Single Task
+    //  Get a single task (optional: can add ownership check)
     @GetMapping("/{id}")
     public Task getTaskById(@PathVariable String id) {
         return taskRepository.findById(id).orElse(null);
     }
 
-    // Update Task
+    //  Update Task (optional: add userId check)
     @PutMapping("/{id}")
     public Task updateTask(@PathVariable String id, @RequestBody Task updatedTask) {
         Task task = taskRepository.findById(id).orElse(null);
@@ -45,7 +65,7 @@ public class TaskController {
         return null;
     }
 
-    // Delete Task
+    //  Delete Task (optional: add userId check)
     @DeleteMapping("/{id}")
     public void deleteTask(@PathVariable String id) {
         taskRepository.deleteById(id);
